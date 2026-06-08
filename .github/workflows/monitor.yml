@@ -23,9 +23,9 @@ on:
   workflow_dispatch:   # 수동 실행 버튼 (Actions 탭에서 직접 실행)
     inputs:
       test_mode:
-        description: "테스트 전송 (신규 판정 무시하고 조건맞는 캠페인 1건 강제 전송 → 텔레그램 연결 확인용)"
+        description: "테스트 전송 (신규 판정 무시하고 조건맞는 캠페인 1건만 강제 전송 → 텔레그램 연결 확인용). 평소엔 끈 채로 두면 정규 실행."
         type: boolean
-        default: true
+        default: false
 
 # seen_campaigns.json 을 커밋하려면 쓰기 권한 필요
 permissions:
