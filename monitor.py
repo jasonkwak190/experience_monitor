@@ -445,10 +445,12 @@ def format_message(c):
         meta.append(c["type"])
     if region:
         meta.append(region)
-    if c["channel"]:
-        meta.append(c["channel"])
     if meta:
         lines.append("📍 " + " · ".join(_esc(m) for m in meta))
+
+    # 채널(블로그/릴스/유튜브 쇼츠/클립 등)을 별도 줄로 명확히 표시
+    if c["channel"]:
+        lines.append(f"📱 채널: {_esc(c['channel'])}")
 
     if c["applied"] is not None and c["capacity"] is not None:
         ratio = (c["applied"] / c["capacity"]) if c["capacity"] else 0
