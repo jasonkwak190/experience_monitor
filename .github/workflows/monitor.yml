@@ -65,6 +65,10 @@ jobs:
 
       - name: seen 파일 변경분 커밋
         run: |
+          if [ ! -f seen_campaigns.json ]; then
+            echo "seen_campaigns.json 없음 (테스트 모드 등) → 커밋 생략"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add seen_campaigns.json
