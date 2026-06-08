@@ -20,7 +20,12 @@ name: 리뷰노트 체험단 모니터
 on:
   schedule:
     - cron: "0 22,0,2,4,6,8,10,12,14 * * *"
-  workflow_dispatch:   # 수동 실행 버튼도 활성화 (Actions 탭에서 직접 돌려볼 수 있음)
+  workflow_dispatch:   # 수동 실행 버튼 (Actions 탭에서 직접 실행)
+    inputs:
+      test_mode:
+        description: "테스트 전송 (신규 판정 무시하고 조건맞는 캠페인 1건 강제 전송 → 텔레그램 연결 확인용)"
+        type: boolean
+        default: true
 
 # seen_campaigns.json 을 커밋하려면 쓰기 권한 필요
 permissions:
@@ -50,7 +55,13 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python monitor.py
+        run: |
+          if [ "${{ github.event.inputs.test_mode }}" = "true" ]; then
+            echo "테스트 모드: 조건맞는 캠페인 1건 강제 전송"
+            python monitor.py --test
+          else
+            python monitor.py
+          fi
 
       - name: seen 파일 변경분 커밋
         run: |
