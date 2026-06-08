@@ -77,6 +77,12 @@ DINNERQUEEN_LIST_URLS = [
     "https://dinnerqueen.net/taste?order=new",
 ]
 
+# ── 택배의여왕 (tqueens.net) — 디너의여왕 자매(배송 전문) ──
+TQUEENS_ENABLED = True
+TQUEENS_LIST_URLS = [
+    "https://tqueens.net/taste?order=new",
+]
+
 # ──────────────────────────────────────────────
 # 6. 크롤링 매너 설정
 # ──────────────────────────────────────────────

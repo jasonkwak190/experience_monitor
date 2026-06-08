@@ -550,6 +550,18 @@ def run(debug=False, test=False):
             print(f"  디너의여왕 수집 실패: {e}")
             fetch_failed = True
 
+    # ── 택배의여왕 ──
+    if getattr(config, "TQUEENS_ENABLED", False):
+        print("[수집] 택배의여왕")
+        try:
+            import tqueens
+            time.sleep(config.REQUEST_DELAY_SEC)
+            for c in tqueens.collect():
+                all_campaigns[c["key"]] = c
+        except Exception as e:
+            print(f"  택배의여왕 수집 실패: {e}")
+            fetch_failed = True
+
     print(f"[수집] 총 {len(all_campaigns)}개 캠페인")
 
     # 필터
