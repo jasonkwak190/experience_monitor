@@ -1,0 +1,65 @@
+name: 리뷰노트 체험단 모니터
+
+# ──────────────────────────────────────────────
+# 스케줄: GitHub Actions cron 은 UTC 기준! (한국시간 = UTC + 9)
+# 원하는 한국시간 → UTC 변환:
+#   한국 07시 = UTC 22시 (전날)
+#   한국 09시 = UTC 00시
+#   한국 11시 = UTC 02시
+#   한국 13시 = UTC 04시
+#   한국 15시 = UTC 06시
+#   한국 17시 = UTC 08시
+#   한국 19시 = UTC 10시
+#   한국 21시 = UTC 12시
+#   한국 23시 = UTC 14시
+# → 아침 7시부터 밤 11시까지 2시간 간격. 새벽(자정~새벽6시)은 실행 안 함.
+#
+# 주의: GitHub Actions 무료 cron 은 정확한 시간 보장 안 됨 (5~15분 지연 가능).
+#       신규 캠페인 모니터링엔 문제없는 수준.
+# ──────────────────────────────────────────────
+on:
+  schedule:
+    - cron: "0 22,0,2,4,6,8,10,12,14 * * *"
+  workflow_dispatch:   # 수동 실행 버튼도 활성화 (Actions 탭에서 직접 돌려볼 수 있음)
+
+# seen_campaigns.json 을 커밋하려면 쓰기 권한 필요
+permissions:
+  contents: write
+
+# 동시 실행 방지 (겹치면 seen 파일 충돌)
+concurrency:
+  group: reviewnote-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 파이썬 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 의존성 설치
+        run: pip install -r requirements.txt
+
+      - name: 모니터 실행
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python monitor.py
+
+      - name: seen 파일 변경분 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add seen_campaigns.json
+          if git diff --staged --quiet; then
+            echo "변경 없음"
+          else
+            git commit -m "update seen campaigns [skip ci]"
+            git push
+          fi
