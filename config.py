@@ -69,6 +69,14 @@ LIST_URLS = [
     "https://www.reviewnote.co.kr/campaigns?s=endingSoon", # 마감임박순
 ]
 
+# ── 디너의여왕 (dinnerqueen.net) ──
+#    비로그인으로 목록 전체가 보이고 robots도 허용됨.
+#    신규순 1페이지(최신 30건)면 신규 감지엔 충분.
+DINNERQUEEN_ENABLED = True
+DINNERQUEEN_LIST_URLS = [
+    "https://dinnerqueen.net/taste?order=new",
+]
+
 # ──────────────────────────────────────────────
 # 6. 크롤링 매너 설정
 # ──────────────────────────────────────────────

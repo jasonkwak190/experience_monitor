@@ -193,7 +193,9 @@ def _normalize_campaign(item):
     deadline, expired = _parse_deadline(item.get("applyEndAt"))
 
     return {
+        "source": "리뷰노트",
         "id": cid,
+        "key": f"리뷰노트:{cid}",
         "title": title,
         "region_field": region_field,
         "is_delivery": is_delivery,
@@ -277,7 +279,9 @@ def _parse_from_html(html):
         guaranteed = ("100% 선정" in card_text) or ("100%선정" in card_text)
 
         result.append({
+            "source": "리뷰노트",
             "id": cid,
+            "key": f"리뷰노트:{cid}",
             "title": title,
             "region_field": "",
             "is_delivery": False,
@@ -359,6 +363,17 @@ def extract_region(campaign):
 # ──────────────────────────────────────────────
 # 필터: 내 조건에 맞는지
 # ──────────────────────────────────────────────
+def _region_match(region_str, my_regions):
+    """'강북구' 설정이 '서울 강북'(디너의여왕 표기)에도 매칭되도록
+    끝의 행정구역 접미사(구/시/군)를 떼고 부분 비교한다.
+    예: '강북구'→'강북' 이 '서울 강북'·'서울 강북구' 양쪽에 매칭."""
+    for m in my_regions:
+        core = re.sub(r"(구|시|군)$", "", m)
+        if core and core in region_str:
+            return True
+    return False
+
+
 def passes_filter(campaign):
     # 0) 신청 마감이 지난 캠페인은 제외
     if campaign.get("expired"):
@@ -376,7 +391,7 @@ def passes_filter(campaign):
     elif not region_str:
         region_ok = True
     else:
-        region_ok = any(r in region_str for r in config.MY_REGIONS)
+        region_ok = _region_match(region_str, config.MY_REGIONS)
 
     if not region_ok:
         return False
@@ -415,9 +430,16 @@ def load_seen():
         return set()
     try:
         with open(config.SEEN_FILE, "r", encoding="utf-8") as f:
-            return set(json.load(f))
+            raw = set(json.load(f))
     except (json.JSONDecodeError, OSError):
         return set()
+    # 구형 seen(사이트 prefix 없는 리뷰노트 숫자 ID)을 "리뷰노트:ID" 로 마이그레이션
+    # → 멀티사이트 key 방식으로 바뀌어도 기존 기록이 무효화돼 폭주하지 않도록.
+    migrated = set()
+    for k in raw:
+        k = str(k)
+        migrated.add(k if ":" in k else f"리뷰노트:{k}")
+    return migrated
 
 
 def save_seen(ids):
@@ -468,6 +490,8 @@ def format_message(c):
     if c["deadline"]:
         lines.append(f"⏰ ~{_esc(c['deadline'])} 마감")
 
+    if c.get("source"):
+        lines.append(f"🏷 {_esc(c['source'])}")
     lines.append(f"🔗 {c['url']}")
     return "\n".join(lines)
 
@@ -480,36 +504,53 @@ def _esc(s):
 # ──────────────────────────────────────────────
 # 메인
 # ──────────────────────────────────────────────
-def run(debug=False, test=False):
-    all_campaigns = {}
-    fetch_failed = False
-
+def _collect_reviewnote(debug=False):
+    """리뷰노트 목록 수집 → (캠페인 리스트, 수집실패여부). debug면 HTML만 저장."""
+    out, failed = [], False
     for url in config.LIST_URLS:
-        print(f"[수집] {url}")
+        print(f"[수집] 리뷰노트 {url}")
         try:
             html = fetch(url)
         except requests.RequestException as e:
             print(f"  요청 실패: {e}")
-            fetch_failed = True
+            failed = True
             continue
-
         if debug:
-            fname = "debug_page.html"
-            with open(fname, "w", encoding="utf-8") as f:
+            with open("debug_page.html", "w", encoding="utf-8") as f:
                 f.write(html)
-            print(f"  → HTML 저장: {fname} (이걸 열어서 파싱 셀렉터를 맞추세요)")
+            print("  → HTML 저장: debug_page.html (파싱 셀렉터 확인용)")
             continue
-
-        for c in parse_campaigns(html):
-            all_campaigns[c["id"]] = c  # id 기준 중복 제거
-
+        out.extend(parse_campaigns(html))
         time.sleep(config.REQUEST_DELAY_SEC)
+    return out, failed
 
+
+def run(debug=False, test=False):
+    all_campaigns = {}   # key("출처:ID") -> 캠페인
+    fetch_failed = False
+
+    # ── 리뷰노트 ──
+    rn, failed = _collect_reviewnote(debug=debug)
+    fetch_failed = fetch_failed or failed
     if debug:
         print("[debug] HTML 저장만 하고 종료")
         return
+    for c in rn:
+        all_campaigns[c["key"]] = c
 
-    print(f"[수집] 총 {len(all_campaigns)}개 캠페인 파싱됨")
+    # ── 디너의여왕 ──
+    if getattr(config, "DINNERQUEEN_ENABLED", False):
+        print("[수집] 디너의여왕")
+        try:
+            import dinnerqueen
+            time.sleep(config.REQUEST_DELAY_SEC)
+            for c in dinnerqueen.collect():
+                all_campaigns[c["key"]] = c
+        except Exception as e:
+            print(f"  디너의여왕 수집 실패: {e}")
+            fetch_failed = True
+
+    print(f"[수집] 총 {len(all_campaigns)}개 캠페인")
 
     # 필터
     matched = [c for c in all_campaigns.values() if passes_filter(c)]
@@ -524,25 +565,23 @@ def run(debug=False, test=False):
             print("[테스트] 매칭 0건 → 필터 무시하고 아무거나 1건 전송")
             send_telegram(format_message(next(iter(all_campaigns.values()))))
         else:
-            print("[테스트] 파싱된 캠페인이 없음. 먼저 --debug 로 HTML 구조 확인 필요.")
+            print("[테스트] 파싱된 캠페인이 없음.")
         return
 
-    # 신규 판정
+    # 신규 판정 (출처:ID 키 기준 — 사이트 간 ID 충돌 방지)
     seen = load_seen()
-    current_ids = set(all_campaigns.keys())
+    current_keys = set(all_campaigns.keys())
 
     if not seen and config.SILENT_FIRST_RUN:
-        # 첫 실행: 알림 없이 현재 것 전부 '본 것'으로 저장.
-        # 단, 일부 페이지 수집이 실패했다면 기준선이 부실하게 잡혀
-        # 다음 실행에 누락분이 전부 '신규'로 폭주할 수 있으니 저장을 보류한다.
+        # 첫 실행: 알림 없이 기준선만 저장. 단 수집 실패가 있으면 보류(폭주 방지).
         if fetch_failed:
-            print("[신규] 첫 실행인데 일부 페이지 수집 실패 → 기준선 저장 보류 (다음 정상 실행 때 시딩)")
+            print("[신규] 첫 실행인데 일부 수집 실패 → 기준선 저장 보류 (다음 정상 실행 때 시딩)")
             return
-        save_seen(current_ids)
-        print(f"[신규] 첫 실행 → 알림 생략, {len(current_ids)}개를 기준선으로 저장")
+        save_seen(current_keys)
+        print(f"[신규] 첫 실행 → 알림 생략, {len(current_keys)}개를 기준선으로 저장")
         return
 
-    new_matched = [c for c in matched if c["id"] not in seen]
+    new_matched = [c for c in matched if c["key"] not in seen]
     print(f"[신규] 조건 통과 중 신규 {len(new_matched)}개")
 
     # 알림 전송
@@ -553,12 +592,12 @@ def run(debug=False, test=False):
             sent += 1
             time.sleep(0.5)  # 텔레그램 rate limit 여유
         except Exception as e:
-            print(f"  전송 실패({c['id']}): {e}")
+            print(f"  전송 실패({c['key']}): {e}")
 
     print(f"[알림] {sent}건 전송")
 
-    # 본 목록 갱신 (이번에 파싱된 전체를 저장 → 다음엔 이것들 제외하고 신규 판정)
-    save_seen(seen | current_ids)
+    # 본 목록 갱신 (이번에 수집한 전체 key 저장 → 다음엔 이것들 제외하고 신규 판정)
+    save_seen(seen | current_keys)
     print("[저장] seen 갱신 완료")
 
 
