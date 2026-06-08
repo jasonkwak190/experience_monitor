@@ -70,17 +70,28 @@ LIST_URLS = [
 ]
 
 # ── 디너의여왕 (dinnerqueen.net) ──
-#    비로그인으로 목록 전체가 보이고 robots도 허용됨.
-#    신규순 1페이지(최신 30건)면 신규 감지엔 충분.
-DINNERQUEEN_ENABLED = True
 DINNERQUEEN_LIST_URLS = [
     "https://dinnerqueen.net/taste?order=new",
 ]
 
 # ── 택배의여왕 (tqueens.net) — 디너의여왕 자매(배송 전문) ──
-TQUEENS_ENABLED = True
 TQUEENS_LIST_URLS = [
     "https://tqueens.net/taste?order=new",
+]
+
+# ──────────────────────────────────────────────
+# 추가 사이트 목록 (모듈명, 표시이름). 각 모듈의 collect() 가 표준 dict 반환.
+# 리뷰노트는 메인이라 별도 처리. 여기서 한 줄 빼면 그 사이트만 수집 중단.
+# (robots 차단으로 제외: 포포몬, 리뷰플레이스 / 로그인 필요로 제외: 레뷰)
+# ──────────────────────────────────────────────
+EXTRA_SITES = [
+    ("dinnerqueen", "디너의여왕"),
+    ("tqueens", "택배의여왕"),
+    ("chvu", "체험뷰"),
+    ("gangnam", "강남맛집"),
+    ("bqueens", "뷰티의여왕"),
+    ("mrblog", "미블"),
+    ("ringble", "링블"),
 ]
 
 # ──────────────────────────────────────────────

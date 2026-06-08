@@ -19,6 +19,7 @@ import re
 import sys
 import time
 import os
+import importlib
 from datetime import datetime, timezone, timedelta
 
 import requests
@@ -538,28 +539,16 @@ def run(debug=False, test=False):
     for c in rn:
         all_campaigns[c["key"]] = c
 
-    # ── 디너의여왕 ──
-    if getattr(config, "DINNERQUEEN_ENABLED", False):
-        print("[수집] 디너의여왕")
+    # ── 추가 사이트들 (config.EXTRA_SITES 의 각 모듈 collect()) ──
+    for module_name, site_name in getattr(config, "EXTRA_SITES", []):
+        print(f"[수집] {site_name}")
         try:
-            import dinnerqueen
+            mod = importlib.import_module(module_name)
             time.sleep(config.REQUEST_DELAY_SEC)
-            for c in dinnerqueen.collect():
+            for c in mod.collect():
                 all_campaigns[c["key"]] = c
         except Exception as e:
-            print(f"  디너의여왕 수집 실패: {e}")
-            fetch_failed = True
-
-    # ── 택배의여왕 ──
-    if getattr(config, "TQUEENS_ENABLED", False):
-        print("[수집] 택배의여왕")
-        try:
-            import tqueens
-            time.sleep(config.REQUEST_DELAY_SEC)
-            for c in tqueens.collect():
-                all_campaigns[c["key"]] = c
-        except Exception as e:
-            print(f"  택배의여왕 수집 실패: {e}")
+            print(f"  {site_name} 수집 실패: {e}")
             fetch_failed = True
 
     print(f"[수집] 총 {len(all_campaigns)}개 캠페인")
