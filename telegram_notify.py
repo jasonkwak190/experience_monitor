@@ -12,6 +12,7 @@ GitHub Actions 에서는 Secrets 로 자동 주입된다.
 """
 
 import os
+import time
 import requests
 
 
@@ -32,7 +33,14 @@ def send_telegram(text):
         "parse_mode": "HTML",
         "disable_web_page_preview": False,  # 링크 미리보기 켜둠 (캠페인 썸네일 보임)
     }
-    resp = requests.post(url, data=payload, timeout=20)
+    # 대량 전송 시 429(Too Many Requests) 대비: retry_after 만큼 쉬고 1회 재시도
+    for _ in range(2):
+        resp = requests.post(url, data=payload, timeout=20)
+        if resp.status_code == 429:
+            retry = resp.json().get("parameters", {}).get("retry_after", 1)
+            time.sleep(retry + 1)
+            continue
+        break
     if resp.status_code != 200:
         raise RuntimeError(f"텔레그램 전송 실패 {resp.status_code}: {resp.text}")
     return resp.json()
