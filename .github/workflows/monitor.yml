@@ -76,5 +76,5 @@ jobs:
             echo "변경 없음"
           else
             git commit -m "update seen campaigns [skip ci]"
-            git push
+            git push origin HEAD:${{ github.ref_name }}
           fi

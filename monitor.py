@@ -342,12 +342,18 @@ def _guess_title(text):
 # 지역 추출 (제목의 [지역/시군구])
 # ──────────────────────────────────────────────
 def extract_region(campaign):
-    """제목 또는 region_field 에서 지역 문자열을 뽑는다."""
-    # 제목 앞의 [서울/강북구] 형태
-    m = re.search(r"\[([^\]]+)\]", campaign["title"])
+    """지역 문자열을 뽑는다.
+    city/sido 로 만든 region_field 가 가장 정확하므로 그걸 우선한다.
+    (제목의 [...] 는 '[부산 전역에서 참여 가능]' 같은 광고 문구일 수 있어 신뢰도가 낮음)
+    region_field 가 없을 때(HTML 폴백 등)만 제목의 [지역] 패턴을 보조로 시도한다."""
+    region_field = campaign.get("region_field") or ""
+    if region_field:
+        return region_field
+    title = campaign.get("title") or ""
+    m = re.search(r"\[([^\]]+)\]", title)
     if m:
         return m.group(1)  # 예: "서울/강북구"
-    return campaign.get("region_field", "")
+    return ""
 
 
 # ──────────────────────────────────────────────
@@ -415,8 +421,12 @@ def load_seen():
 
 
 def save_seen(ids):
-    with open(config.SEEN_FILE, "w", encoding="utf-8") as f:
+    # 원자적 쓰기: 임시파일에 먼저 쓰고 교체.
+    # (바로 "w"로 열면 쓰는 중 크래시 시 파일이 빈 채로 남아 seen 기록이 통째로 리셋됨)
+    tmp = config.SEEN_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(sorted(ids), f, ensure_ascii=False, indent=0)
+    os.replace(tmp, config.SEEN_FILE)
 
 
 # ──────────────────────────────────────────────
@@ -447,8 +457,9 @@ def format_message(c):
     gift = []
     if c["offer"]:
         gift.append(_esc(c["offer"][:60]))
-    if c["point"]:
-        gift.append(f"{int(c['point']):,} P")
+    pt = _to_int(c["point"])  # JSON경로는 int, HTML폴백은 "100,000 P" 문자열 → 안전 정수화
+    if pt:
+        gift.append(f"{pt:,} P")
     if gift:
         lines.append("🎁 " + " + ".join(gift))
 
@@ -469,6 +480,7 @@ def _esc(s):
 # ──────────────────────────────────────────────
 def run(debug=False, test=False):
     all_campaigns = {}
+    fetch_failed = False
 
     for url in config.LIST_URLS:
         print(f"[수집] {url}")
@@ -476,6 +488,7 @@ def run(debug=False, test=False):
             html = fetch(url)
         except requests.RequestException as e:
             print(f"  요청 실패: {e}")
+            fetch_failed = True
             continue
 
         if debug:
@@ -517,7 +530,12 @@ def run(debug=False, test=False):
     current_ids = set(all_campaigns.keys())
 
     if not seen and config.SILENT_FIRST_RUN:
-        # 첫 실행: 알림 없이 현재 것 전부 '본 것'으로 저장
+        # 첫 실행: 알림 없이 현재 것 전부 '본 것'으로 저장.
+        # 단, 일부 페이지 수집이 실패했다면 기준선이 부실하게 잡혀
+        # 다음 실행에 누락분이 전부 '신규'로 폭주할 수 있으니 저장을 보류한다.
+        if fetch_failed:
+            print("[신규] 첫 실행인데 일부 페이지 수집 실패 → 기준선 저장 보류 (다음 정상 실행 때 시딩)")
+            return
         save_seen(current_ids)
         print(f"[신규] 첫 실행 → 알림 생략, {len(current_ids)}개를 기준선으로 저장")
         return
