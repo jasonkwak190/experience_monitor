@@ -114,4 +114,4 @@ SEEN_FILE = "seen_campaigns.json"
 #  - True: 첫 실행에서는 알림 안 보내고 현재 캠페인을 "이미 본 것"으로만 저장
 #          (안 그러면 첫 실행에 수백 개가 한꺼번에 옴)
 #  - 권장: True 로 두고 첫 실행 한 번 돌린 뒤, 그다음부터 신규만 받기
-SILENT_FIRST_RUN = False  # ★일회성: 첫 실행에 현재 조건맞는 캠페인을 전부 받기 위함. 받은 뒤 True로 복구.
+SILENT_FIRST_RUN = True  # 첫 실행(seen 없을 때)은 알림 없이 기준선만 저장 → 폭탄 방지
