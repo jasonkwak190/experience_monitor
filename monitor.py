@@ -455,13 +455,33 @@ def save_seen(ids):
 # ──────────────────────────────────────────────
 # 알림 메시지 포맷
 # ──────────────────────────────────────────────
+def _competition_ratio(c):
+    """경쟁률(신청/모집). 100% 선정은 -1(최우선), 계산 불가(배송형 등)면 None."""
+    if c.get("guaranteed"):
+        return -1.0
+    a, cap = c.get("applied"), c.get("capacity")
+    if a is not None and cap and cap > 0:
+        return a / cap
+    return None
+
+
+def _sort_key(c):
+    """경쟁률 낮은(=당첨 쉬운) 순. 경쟁률 불명(배송형 등)은 뒤로."""
+    r = _competition_ratio(c)
+    return (0, r) if r is not None else (1, 0.0)
+
+
 def format_message(c):
     region = extract_region(c)
-    star = "⭐ " if (c["guaranteed"] or (
-        c["applied"] is not None and c["capacity"] is not None and c["capacity"] >= c["applied"]
-    )) else ""
+    r = _competition_ratio(c)
+    if r is not None and r <= 1:
+        badge = "🔥 "   # 거의 확정 (모집 ≥ 신청 / 100% 선정)
+    elif r is not None and r <= 3:
+        badge = "⭐ "   # 경쟁률 낮음, 노려볼 만
+    else:
+        badge = ""
 
-    lines = [f"{star}<b>{_esc(c['title'])}</b>"]
+    lines = [f"{badge}<b>{_esc(c['title'])}</b>"]
 
     meta = []
     if c["type"]:
@@ -553,8 +573,9 @@ def run(debug=False, test=False):
 
     print(f"[수집] 총 {len(all_campaigns)}개 캠페인")
 
-    # 필터
+    # 필터 + 경쟁률 낮은(당첨 쉬운) 순 정렬
     matched = [c for c in all_campaigns.values() if passes_filter(c)]
+    matched.sort(key=_sort_key)
     print(f"[필터] 조건 통과 {len(matched)}개")
 
     # 테스트 모드: 신규 판정 무시하고 1건 강제 전송
